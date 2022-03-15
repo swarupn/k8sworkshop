@@ -2,7 +2,7 @@
 
 # Global env variables / defaults
 KUBERNETES_VERSION=1.23.3
-POD_NETWORK_CIDR="10.244.0.0/16"
+POD_NETWORK_CIDR="192.168.0.0/16"
 
 # Functions library
 os_type() {
@@ -37,7 +37,7 @@ disable_swap() {
 }
 
 
-# Function desc: Make cgroup manager as systemd for the containers	
+# Function desc: Make cgroup manager as systemd for the containers        
 config_docker_ubuntu() {
         cat << EOF > /etc/docker/daemon.json
 {
@@ -50,9 +50,9 @@ EOF
 # Make sure that the br_netfilter module is loaded. This can be done by running lsmod | grep br_netfilter. To load it explicitly call sudo modprobe br_netfilter.
 # As a requirement for your Linux Node's iptables to correctly see bridged traffic, you should ensure net.bridge.bridge-nf-call-iptables is set to 1 in your sysctl config
 config_netfilter() {
-	echo "configuring netfilter"
+        echo "configuring netfilter"
         sudo modprobe br_netfilter
-	cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
+        cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
         br_netfilter
 EOF
 
@@ -75,9 +75,9 @@ package_ubuntu() {
         apt-get update && apt-get install -y apt-transport-https
         sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
         echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
-	apt-get update
+        apt-get update
         apt-get install -y kubelet kubeadm kubectl
-	sudo apt-mark hold kubelet kubeadm kubectl
+        sudo apt-mark hold kubelet kubeadm kubectl
 }
 
 
@@ -95,8 +95,8 @@ Install_k8s() {
         #4. Disable firewall
         disable_firewall
 
-	#5. Enable netfiler
-	config_netfilter
+        #5. Enable netfiler
+        config_netfilter
 
         # Phase 2 - install kubernetes and kubeadm packages
         case "$(os_type)" in
@@ -111,7 +111,7 @@ Install_k8s() {
 
 
         # Phase 3 - initialize the Kubernetes cluster
-        kubeadm init --pod-network-cidr=$POD_NETWORK_CIDR --kubernetes-version=$KUBERNETES_VERSION | tee kubeadm.log | grep -P '^\[' --color=never
+        kubeadm init --pod-network-cidr=$POD_NETWORK_CIDR --kubernetes-version=$KUBERNETES_VERSION | tee kubeadm.log
 
         export KUBECONFIG=/etc/kubernetes/admin.conf
         
@@ -122,31 +122,20 @@ Install_k8s() {
         # available for scheduling (Ready), it should detect a network plugin configuration.
         kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
 
-	mkdir -p $HOME/.kube
-        sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-
-        cat << 'END'
-        Your single-node Kubernetes cluster has initialized successfully!
-
-        To start using your cluster, you need to run (as a regular user):
-
         mkdir -p $HOME/.kube
         sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-        sudo chown $(id -u):$(id -g) $HOME/.kube/config
-        
-END
 }
 
 Uninstall_k8s() {
         kubeadm reset -f
         sudo apt-mark unhold kubelet kubeadm kubectl
-	systemctl stop kubelet.service
+        systemctl stop kubelet.service
         systemctl disable kubelet.service
 
-	sudo apt-get purge kubeadm kubectl kubelet kubernetes-cni -y
+        sudo apt-get purge kubeadm kubectl kubelet kubernetes-cni -y
         sudo apt-get autoremove  -y
         rm -rf /etc/systemd/system/kubelet.service /etc/systemd/system/kubelet.service.d/
-	sudo rm -rf ~/.kube
+        sudo rm -rf ~/.kube
         sudo rm -rf /var/lib/etcd
         sudo rm -rf /etc/kubernetes/
         sudo rm -rf /etc/cni/net.d
