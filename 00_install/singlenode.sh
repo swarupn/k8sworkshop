@@ -36,12 +36,8 @@ disable_swap() {
        echo "swap memeory disbaled"
 }
 
-# The active storage driver determines how Docker manages your images and containers. The available drivers implement 
-# different strategies for handling image layers. They’ll have unique performance characteristics depending on the 
-# storage scenario at hand. Example: overlay2 operates at the file level as opposed to the block level. 
-# This enhances performance by maximizing memory use efficiency but can result in larger writable layers when 
-# many changes are made. Other examples: btrfs, zfs etc.
-# Function desc: Use storage driver as overlay2 . This is suggestion
+
+# Function desc: Make cgroup manager as systemd for the containers        
 config_docker_ubuntu() {
         cat << EOF > /etc/docker/daemon.json
 {
@@ -51,10 +47,12 @@ EOF
         systemctl restart docker
 }
 
+# Make sure that the br_netfilter module is loaded. This can be done by running lsmod | grep br_netfilter. To load it explicitly call sudo modprobe br_netfilter.
+# As a requirement for your Linux Node's iptables to correctly see bridged traffic, you should ensure net.bridge.bridge-nf-call-iptables is set to 1 in your sysctl config
 config_netfilter() {
-	echo "configuring netfilter"
+        echo "configuring netfilter"
         sudo modprobe br_netfilter
-	cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
+        cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
         br_netfilter
 EOF
 
@@ -65,23 +63,26 @@ EOF
         sudo sysctl --system
 }
 
+# Some times for cnis firewalls may block some traffic. So it can be disabled other wise enable traffic for the port opened.
 disable_firewall() {
         echo "disabling firewall"
         systemctl stop ufw
         systemctl disable ufw
 }
 
+#install k8s
 package_ubuntu() {
         apt-get update && apt-get install -y apt-transport-https
         sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
         echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
-	apt-get update
+        apt-get update
         apt-get install -y kubelet kubeadm kubectl
-	sudo apt-mark hold kubelet kubeadm kubectl
+        sudo apt-mark hold kubelet kubeadm kubectl
 }
 
 
 Install_k8s() {
+        # Phase 1  Some pre requisite test
         # 1. Are we running as root or sudo?
         running_as_root
 
@@ -94,8 +95,8 @@ Install_k8s() {
         #4. Disable firewall
         disable_firewall
 
-	#5. Enable netfiler
-	config_netfilter
+        #5. Enable netfiler
+        config_netfilter
 
         # Phase 2 - install kubernetes and kubeadm packages
         case "$(os_type)" in
@@ -111,39 +112,30 @@ Install_k8s() {
 
         # Phase 3 - initialize the Kubernetes cluster
         kubeadm init --pod-network-cidr=$POD_NETWORK_CIDR --kubernetes-version=$KUBERNETES_VERSION | tee kubeadm.log
-        #kubeadm init --pod-network-cidr=$POD_NETWORK_CIDR --kubernetes-version=$KUBERNETES_VERSION | tee kubeadm.log | grep -P '^\[' --color=never
-        # Remove master taints to make master schedulable for pods
+
         export KUBECONFIG=/etc/kubernetes/admin.conf
+        
+        # Remove master taints to make master schedulable for pods. Generaly master nodes are not suggested to scedule other pods, so by default it is tainted.
         kubectl taint nodes --all node-role.kubernetes.io/master-
+        
         # Install networking. Even in single-node mode, before the master node will become
         # available for scheduling (Ready), it should detect a network plugin configuration.
         kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
 
         mkdir -p $HOME/.kube
         sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-
-        cat << 'END'
-        Your single-node Kubernetes cluster has initialized successfully!
-
-        To start using your cluster, you need to run (as a regular user):
-
-        mkdir -p $HOME/.kube
-        sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-        sudo chown $(id -u):$(id -g) $HOME/.kube/config
-        
-END
 }
 
 Uninstall_k8s() {
         kubeadm reset -f
         sudo apt-mark unhold kubelet kubeadm kubectl
-	systemctl stop kubelet.service
+        systemctl stop kubelet.service
         systemctl disable kubelet.service
 
-	sudo apt-get purge kubeadm kubectl kubelet kubernetes-cni -y
+        sudo apt-get purge kubeadm kubectl kubelet kubernetes-cni -y
         sudo apt-get autoremove  -y
         rm -rf /etc/systemd/system/kubelet.service /etc/systemd/system/kubelet.service.d/
-	sudo rm -rf ~/.kube
+        sudo rm -rf ~/.kube
         sudo rm -rf /var/lib/etcd
         sudo rm -rf /etc/kubernetes/
         sudo rm -rf /etc/cni/net.d
