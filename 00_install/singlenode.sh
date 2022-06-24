@@ -1,7 +1,8 @@
+
 #!/bin/bash
 
 # Global env variables / defaults
-KUBERNETES_VERSION=1.23.3
+KUBERNETES_VERSION=1.19.3
 POD_NETWORK_CIDR="192.168.0.0/16"
 
 # Functions library
@@ -76,7 +77,7 @@ package_ubuntu() {
         sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
         echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
         apt-get update
-        apt-get install -y kubelet kubeadm kubectl
+        apt-get install -y kubelet=$KUBERNETES_VERSION-00 kubeadm=$KUBERNETES_VERSION-00 kubectl=$KUBERNETES_VERSION-00
         sudo apt-mark hold kubelet kubeadm kubectl
 }
 
@@ -117,11 +118,11 @@ Install_k8s() {
         
         # Remove master taints to make master schedulable for pods. Generaly master nodes are not suggested to scedule other pods, so by default it is tainted.
         kubectl taint nodes --all node-role.kubernetes.io/master-
-        
+        sleep 30
         # Install networking. Even in single-node mode, before the master node will become
         # available for scheduling (Ready), it should detect a network plugin configuration.
-        kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
-
+        #kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+        kubectl apply -f calico.yaml
         mkdir -p $HOME/.kube
         sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 }
@@ -183,4 +184,3 @@ while getopts ":irh" option; do
          exit;;
    esac
 done
-
