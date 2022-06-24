@@ -125,6 +125,10 @@ Install_k8s() {
         kubectl apply -f calico.yaml
         mkdir -p $HOME/.kube
         sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+        # NOTE: Execute below three commands to use kubectl from other users.
+        # mkdir -p $HOME/.kube
+        # sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+        # sudo chown -R $(id -u):$(id -g) /home/root1/.kube/config
 }
 
 Uninstall_k8s() {
